@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "AI Prompt Queue",
+  "version": "0.1.0",
+  "description": "Write prompts ahead of time, keep them in a queue, and drop them into ChatGPT, Claude or Gemini's chatbox whenever you want.",
+  "permissions": ["storage", "sidePanel"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*",
+    "https://claude.ai/*",
+    "https://gemini.google.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open AI Prompt Queue"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*",
+        "https://claude.ai/*",
+        "https://gemini.google.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "insert-next-prompt": {
+      "suggested_key": {
+        "default": "Alt+V"
+      },
+      "description": "Insert the next queued prompt into the chatbox"
+    }
+  }
+}

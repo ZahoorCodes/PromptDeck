@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Prompt Queue</title>
+  <link rel="stylesheet" href="panel.css" />
+</head>
+<body>
+  <header>
+    <h1>Prompt Queue</h1>
+    <span id="count" class="count"></span>
+  </header>
+
+  <section class="composer">
+    <textarea id="draft" rows="4" placeholder="Write your next prompt here while the AI is still responding…&#10;&#10;Ctrl+Enter to add it to the queue."></textarea>
+    <div class="composer-actions">
+      <button id="add" class="primary">Add to queue</button>
+      <button id="insert-now" title="Skip the queue: put this draft straight into the chatbox">Insert now</button>
+    </div>
+  </section>
+
+  <div id="status" class="status" hidden></div>
+
+  <ul id="queue" class="queue"></ul>
+
+  <p id="empty" class="empty">
+    Queue is empty. Write prompts above and they will wait here until you send
+    them to the chatbox. <br /><br />
+    Tip: <kbd>Alt</kbd>+<kbd>V</kbd> on a ChatGPT / Claude / Gemini tab inserts
+    the next queued prompt without opening this panel.
+  </p>
+
+  <script src="../queue.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>
