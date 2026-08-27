@@ -1,15 +1,10 @@
 {
   "manifest_version": 3,
   "name": "PromptDeck — AI Prompt Queue",
-  "version": "1.1.0",
-  "description": "Draft and queue your next prompts while ChatGPT, Claude or Gemini is responding — deal them to the chatbox when YOU are ready.",
-  "permissions": ["storage", "unlimitedStorage", "sidePanel"],
-  "host_permissions": [
-    "https://chatgpt.com/*",
-    "https://chat.openai.com/*",
-    "https://claude.ai/*",
-    "https://gemini.google.com/*"
-  ],
+  "version": "1.2.0",
+  "description": "Draft and queue your next prompts while the AI is responding — works on ChatGPT, Claude, Gemini, Grok, DeepSeek and any AI chat.",
+  "permissions": ["storage", "unlimitedStorage", "sidePanel", "scripting"],
+  "host_permissions": ["<all_urls>"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -33,12 +28,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://chatgpt.com/*",
-        "https://chat.openai.com/*",
-        "https://claude.ai/*",
-        "https://gemini.google.com/*"
-      ],
+      "matches": ["http://*/*", "https://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

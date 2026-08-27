@@ -22,11 +22,11 @@ first, then paste it back. Every. Single. Time.
 PromptDeck gives you a **side panel deck** where drafts live outside the
 chatbox. They wait there, in order, until you transfer one in.
 
-Works on:
-
-- **ChatGPT** — chatgpt.com / chat.openai.com
-- **Claude** — claude.ai
-- **Gemini** — gemini.google.com
+**Works on any AI chat site.** Tuned adapters for ChatGPT, Claude, Gemini,
+Grok, DeepSeek, Perplexity, Copilot, Mistral, Poe, Meta AI, Google AI Studio,
+Kimi and Qwen; every other site gets a smart generic composer finder (the
+focused editable, or the visible textarea/contenteditable nearest the bottom
+of the screen — where chat composers live).
 
 ## Features
 

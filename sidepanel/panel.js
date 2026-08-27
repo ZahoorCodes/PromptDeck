@@ -55,19 +55,23 @@ function toast(message, kind) {
 async function sendToActiveTab(text, send, files) {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) return { ok: false, error: 'No active tab found.' };
+  const message = { type: 'INSERT_PROMPT', text, send, files: files || [] };
   try {
-    const result = await chrome.tabs.sendMessage(tab.id, {
-      type: 'INSERT_PROMPT',
-      text,
-      send,
-      files: files || [],
-    });
+    const result = await chrome.tabs.sendMessage(tab.id, message);
     return result || { ok: false, error: 'No response from the page.' };
   } catch (err) {
-    return {
-      ok: false,
-      error: 'Active tab is not a supported AI site. Open ChatGPT, Claude or Gemini first.',
-    };
+    // Tab predates the extension (or the script got dropped) — inject the
+    // content script on demand and retry once.
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+      const result = await chrome.tabs.sendMessage(tab.id, message);
+      return result || { ok: false, error: 'No response from the page.' };
+    } catch (err2) {
+      return {
+        ok: false,
+        error: "Can't reach this tab — browser pages (chrome://, Web Store, new tab) are off-limits. Switch to your AI chat tab.",
+      };
+    }
   }
 }
 

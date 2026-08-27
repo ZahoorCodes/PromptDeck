@@ -1,8 +1,14 @@
 // Content script: receives INSERT_PROMPT messages and types the text into
-// the AI site's chatbox. Each supported site has a small adapter describing
-// where its input and send button live.
+// the page's chat composer. Popular AI sites get tuned adapters (selectors
+// for their input box and send button); every other site falls back to a
+// generic composer finder, so PromptDeck works on any AI chat.
 
 (() => {
+  // Guard: this script can be injected programmatically on top of the
+  // declarative injection — never register the listener twice.
+  if (window.__promptDeckLoaded) return;
+  window.__promptDeckLoaded = true;
+
   const ADAPTERS = [
     {
       name: 'ChatGPT',
@@ -12,10 +18,7 @@
         'div.ProseMirror[contenteditable="true"]',
         'textarea[data-testid="prompt-textarea"]',
       ],
-      sendSelectors: [
-        '[data-testid="send-button"]',
-        'button[aria-label*="Send" i]',
-      ],
+      sendSelectors: ['[data-testid="send-button"]'],
     },
     {
       name: 'Claude',
@@ -23,30 +26,95 @@
       inputSelectors: [
         'div.ProseMirror[contenteditable="true"]',
         'div[contenteditable="true"][aria-label]',
-        'div[contenteditable="true"]',
       ],
-      sendSelectors: [
-        'button[aria-label="Send message"]',
-        'button[aria-label*="Send" i]',
-      ],
+      sendSelectors: ['button[aria-label="Send message"]'],
     },
     {
       name: 'Gemini',
       hosts: ['gemini.google.com'],
-      inputSelectors: [
-        '.ql-editor[contenteditable="true"]',
-        'div[contenteditable="true"]',
-      ],
-      sendSelectors: [
-        'button[aria-label*="Send" i]',
-        'button.send-button',
-      ],
+      inputSelectors: ['.ql-editor[contenteditable="true"]'],
+      sendSelectors: ['button[aria-label*="Send" i]'],
     },
+    {
+      name: 'Grok',
+      hosts: ['grok.com', 'x.com'],
+      inputSelectors: ['textarea[aria-label*="Grok" i]', 'div[contenteditable="true"]', 'textarea'],
+      sendSelectors: ['button[aria-label*="Submit" i]', 'button[aria-label*="Grok" i]'],
+    },
+    {
+      name: 'DeepSeek',
+      hosts: ['chat.deepseek.com'],
+      inputSelectors: ['#chat-input', 'textarea'],
+      sendSelectors: ['div[role="button"][aria-disabled="false"]'],
+    },
+    {
+      name: 'Perplexity',
+      hosts: ['perplexity.ai', 'www.perplexity.ai'],
+      inputSelectors: ['textarea[placeholder*="Ask" i]', 'div[contenteditable="true"]', 'textarea'],
+      sendSelectors: ['button[aria-label*="Submit" i]'],
+    },
+    {
+      name: 'Copilot',
+      hosts: ['copilot.microsoft.com'],
+      inputSelectors: ['#userInput', 'textarea'],
+      sendSelectors: ['button[aria-label*="Submit" i]', 'button[title*="Submit" i]'],
+    },
+    {
+      name: 'Mistral',
+      hosts: ['chat.mistral.ai'],
+      inputSelectors: ['div[contenteditable="true"]', 'textarea'],
+      sendSelectors: ['button[aria-label*="Send" i]', 'button[type="submit"]'],
+    },
+    {
+      name: 'Poe',
+      hosts: ['poe.com'],
+      inputSelectors: ['textarea[class*="GrowingTextArea" i]', 'textarea'],
+      sendSelectors: ['button[data-button-send="true"]', 'button[aria-label*="Send" i]'],
+    },
+    {
+      name: 'Meta AI',
+      hosts: ['meta.ai'],
+      inputSelectors: ['div[contenteditable="true"]', 'textarea'],
+      sendSelectors: ['div[aria-label*="Send" i]', 'button[aria-label*="Send" i]'],
+    },
+    {
+      name: 'AI Studio',
+      hosts: ['aistudio.google.com'],
+      inputSelectors: ['textarea[aria-label*="prompt" i]', 'textarea'],
+      sendSelectors: ['button[aria-label*="Run" i]'],
+    },
+    {
+      name: 'Kimi',
+      hosts: ['kimi.com', 'kimi.moonshot.cn'],
+      inputSelectors: ['div[contenteditable="true"]', 'textarea'],
+      sendSelectors: ['button[aria-label*="Send" i]'],
+    },
+    {
+      name: 'Qwen',
+      hosts: ['chat.qwen.ai'],
+      inputSelectors: ['textarea', 'div[contenteditable="true"]'],
+      sendSelectors: ['button[type="submit"]', 'button[aria-label*="Send" i]'],
+    },
+  ];
+
+  // Last-resort send buttons for sites without a tuned adapter.
+  const GENERIC_SEND = [
+    'button[aria-label*="send" i]',
+    'button[data-testid*="send" i]',
+    'button[title*="send" i]',
+    'button[type="submit"]',
   ];
 
   function currentAdapter() {
     const host = location.hostname;
-    return ADAPTERS.find((a) => a.hosts.some((h) => host === h || host.endsWith('.' + h))) || null;
+    return (
+      ADAPTERS.find((a) => a.hosts.some((h) => host === h || host.endsWith('.' + h))) || {
+        name: host.replace(/^www\./, ''),
+        inputSelectors: [],
+        sendSelectors: [],
+        generic: true,
+      }
+    );
   }
 
   function isVisible(el) {
@@ -56,10 +124,29 @@
 
   function findFirst(selectors) {
     for (const sel of selectors) {
-      const matches = Array.from(document.querySelectorAll(sel)).filter(isVisible);
+      let matches;
+      try {
+        matches = Array.from(document.querySelectorAll(sel)).filter(isVisible);
+      } catch (err) {
+        continue;
+      }
       if (matches.length) return matches[matches.length - 1]; // last = usually the composer, not an edit box above
     }
     return null;
+  }
+
+  // Generic composer finder: the focused editable if there is one, otherwise
+  // the visible textarea/contenteditable sitting lowest on the screen —
+  // chat composers live at the bottom of the viewport.
+  function genericInput() {
+    const active = document.activeElement;
+    if (active && (active.tagName === 'TEXTAREA' || active.isContentEditable)) return active;
+    const candidates = Array.from(
+      document.querySelectorAll('textarea, div[contenteditable="true"]')
+    ).filter((el) => isVisible(el) && el.getBoundingClientRect().width > 150);
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => a.getBoundingClientRect().bottom - b.getBoundingClientRect().bottom);
+    return candidates[candidates.length - 1];
   }
 
   function insertIntoTextarea(el, text) {
@@ -87,8 +174,8 @@
     selection.removeAllRanges();
     selection.addRange(range);
 
-    // execCommand fires the beforeinput/input events ProseMirror and Quill
-    // listen for, so the editor's internal state stays consistent.
+    // execCommand fires the beforeinput/input events ProseMirror, Quill and
+    // Lexical listen for, so the editor's internal state stays consistent.
     const inserted = document.execCommand('insertText', false, text);
     if (!inserted) {
       // Fallback: synthesize the same event sequence manually.
@@ -109,10 +196,9 @@
   }
 
   // Attach files to the site's composer. Preferred path: a hidden
-  // <input type="file"> (ChatGPT/Claude/Gemini all keep one for their attach
-  // button) — set its files and fire a change event. Fallback: a synthetic
-  // paste event carrying the files, which these sites also accept (same code
-  // path as pasting a screenshot).
+  // <input type="file"> (most chat UIs keep one for their attach button) —
+  // set its files and fire a change event. Fallback: a synthetic paste event
+  // carrying the files, the same code path as pasting a screenshot.
   function attachFiles(input, files) {
     const dt = new DataTransfer();
     for (const f of files) dt.items.add(dataUrlToFile(f));
@@ -138,10 +224,10 @@
 
   function insertPrompt(text, files) {
     const adapter = currentAdapter();
-    if (!adapter) return { ok: false, error: 'This site is not supported.' };
-
-    const input = findFirst(adapter.inputSelectors);
-    if (!input) return { ok: false, error: `Could not find the ${adapter.name} chatbox on this page.` };
+    const input = findFirst(adapter.inputSelectors) || genericInput();
+    if (!input) {
+      return { ok: false, error: `Could not find a chatbox on ${adapter.name}.` };
+    }
 
     let attached = 0;
     if (Array.isArray(files) && files.length) {
@@ -154,7 +240,7 @@
     }
 
     if (text) {
-      if (input.tagName === 'TEXTAREA') {
+      if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
         insertIntoTextarea(input, text);
       } else {
         insertIntoContentEditable(input, text);
@@ -165,8 +251,7 @@
 
   function clickSend() {
     const adapter = currentAdapter();
-    if (!adapter) return false;
-    const button = findFirst(adapter.sendSelectors);
+    const button = findFirst(adapter.sendSelectors.concat(GENERIC_SEND));
     if (!button || button.disabled) return false;
     button.click();
     return true;

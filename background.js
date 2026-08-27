@@ -5,6 +5,39 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((err) => console.error('sidePanel.setPanelBehavior failed:', err));
 
+function isInjectable(url) {
+  return typeof url === 'string' && /^https?:/.test(url);
+}
+
+// Content scripts only auto-inject into pages loaded AFTER the extension is
+// installed/updated. Inject into every already-open tab too, so nobody has
+// to reload their tabs after an update.
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (!isInjectable(tab.url)) continue;
+    chrome.scripting
+      .executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+      .catch(() => {}); // tabs we can't touch (store pages, discarded tabs)
+  }
+});
+
+// Make sure the tab has our content script, injecting on demand if needed
+// (e.g. a tab that was open before install, or after a service-worker swap).
+async function ensureContentScript(tabId) {
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    return true;
+  } catch (err) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] });
+      return true;
+    } catch (err2) {
+      return false;
+    }
+  }
+}
+
 // Alt+V (configurable at chrome://extensions/shortcuts): insert the next
 // queued prompt into the chatbox of the active tab.
 chrome.commands.onCommand.addListener(async (command) => {
@@ -14,7 +47,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (!item) return;
 
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (!tab) {
+  if (!tab || !(await ensureContentScript(tab.id))) {
     await unshiftQueue(item);
     return;
   }
@@ -28,7 +61,6 @@ chrome.commands.onCommand.addListener(async (command) => {
     });
     if (!result || !result.ok) await unshiftQueue(item);
   } catch (err) {
-    // No content script in this tab (not a supported AI site) — put it back.
     await unshiftQueue(item);
   }
 });
