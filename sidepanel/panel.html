@@ -3,33 +3,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Prompt Queue</title>
+  <title>PromptDeck</title>
   <link rel="stylesheet" href="panel.css" />
 </head>
 <body>
-  <header>
-    <h1>Prompt Queue</h1>
-    <span id="count" class="count"></span>
-  </header>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <img src="../icons/icon32.png" alt="" class="logo" />
+        <div class="brand-text">
+          <span class="wordmark">Prompt<em>Deck</em></span>
+          <span class="tagline">your prompts, on deck</span>
+        </div>
+      </div>
+      <span id="count" class="count-pill" hidden></span>
+    </header>
 
-  <section class="composer">
-    <textarea id="draft" rows="4" placeholder="Write your next prompt here while the AI is still responding…&#10;&#10;Ctrl+Enter to add it to the queue."></textarea>
-    <div class="composer-actions">
-      <button id="add" class="primary">Add to queue</button>
-      <button id="insert-now" title="Skip the queue: put this draft straight into the chatbox">Insert now</button>
+    <section class="composer card">
+      <textarea
+        id="draft"
+        rows="3"
+        placeholder="Draft your next prompt here while the AI is still typing…"
+      ></textarea>
+      <div class="composer-footer">
+        <span class="hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd> to queue</span>
+        <span id="charcount" class="charcount"></span>
+      </div>
+      <div class="composer-actions">
+        <button id="add" class="btn btn-primary">
+          <svg viewBox="0 0 16 16" class="ic"><path d="M8 2.5v11M2.5 8h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+          Add to Deck
+        </button>
+        <button id="insert-now" class="btn btn-ghost" title="Skip the queue — put this draft straight into the chatbox">
+          <svg viewBox="0 0 16 16" class="ic"><path d="M2 8h9M8 4.5 11.5 8 8 11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M13.5 3v10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          Insert Now
+        </button>
+      </div>
+    </section>
+
+    <div class="queue-head">
+      <h2>Up next</h2>
+      <button id="clear-all" class="link-btn" hidden>Clear all</button>
     </div>
-  </section>
 
-  <div id="status" class="status" hidden></div>
+    <ul id="queue" class="queue" aria-label="Queued prompts"></ul>
 
-  <ul id="queue" class="queue"></ul>
+    <div id="empty" class="empty">
+      <svg viewBox="0 0 96 96" class="empty-art" aria-hidden="true">
+        <defs>
+          <linearGradient id="eg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#d946ef"/>
+          </linearGradient>
+        </defs>
+        <rect x="18" y="50" width="60" height="14" rx="7" fill="url(#eg)" opacity=".25"/>
+        <rect x="14" y="32" width="68" height="14" rx="7" fill="url(#eg)" opacity=".5"/>
+        <rect x="10" y="14" width="52" height="14" rx="7" fill="url(#eg)"/>
+        <path d="M70 15l12 6-12 6z" fill="url(#eg)"/>
+      </svg>
+      <p class="empty-title">Your deck is empty</p>
+      <p class="empty-text">
+        Write prompts above — they'll wait here in order until you deal them to
+        the chatbox.
+      </p>
+      <p class="empty-tip">
+        <kbd>Alt</kbd>+<kbd>V</kbd> on any AI tab inserts the next prompt —
+        no need to open this panel.
+      </p>
+    </div>
 
-  <p id="empty" class="empty">
-    Queue is empty. Write prompts above and they will wait here until you send
-    them to the chatbox. <br /><br />
-    Tip: <kbd>Alt</kbd>+<kbd>V</kbd> on a ChatGPT / Claude / Gemini tab inserts
-    the next queued prompt without opening this panel.
-  </p>
+    <footer class="footer">
+      <span>Developed by <strong>Zahoor Shah</strong></span>
+      <span class="dot">·</span>
+      <span id="version"></span>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="../queue.js"></script>
   <script src="panel.js"></script>
