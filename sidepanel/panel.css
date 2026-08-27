@@ -453,3 +453,56 @@ kbd {
   font-size: 10.5px;
   font-family: inherit;
 }
+
+/* ---------- attachments ---------- */
+
+.footer-right { display: inline-flex; align-items: center; gap: 4px; }
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px 8px;
+}
+
+.item-files { padding: 8px 0 0; }
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 11px;
+  background: var(--accent-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+
+.file-chip::before {
+  content: "📎";
+  font-size: 10px;
+}
+
+.file-name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.file-size { color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.file-remove {
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.file-remove:hover { color: var(--danger); }

@@ -41,6 +41,10 @@ Works on:
   (customizable at `chrome://extensions/shortcuts`).
 - ⚡ **Insert Now** — sends your current draft straight to the chatbox,
   skipping the queue.
+- 📎 **File attachments** — attach files (up to 15 MB per prompt) to any
+  queued prompt; they're handed to the site's uploader along with the text,
+  the same way a pasted screenshot is. Give uploads a moment to finish before
+  submitting.
 - 🌗 **Light & dark** — follows your system theme.
 - 🔒 **Private by design** — no build step, no dependencies, no analytics; no
   data ever leaves your browser.

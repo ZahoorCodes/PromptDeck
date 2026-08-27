@@ -100,19 +100,67 @@
     }
   }
 
-  function insertPrompt(text) {
+  function dataUrlToFile(f) {
+    const base64 = f.dataUrl.split(',')[1];
+    const bin = atob(base64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new File([bytes], f.name, { type: f.type || 'application/octet-stream' });
+  }
+
+  // Attach files to the site's composer. Preferred path: a hidden
+  // <input type="file"> (ChatGPT/Claude/Gemini all keep one for their attach
+  // button) — set its files and fire a change event. Fallback: a synthetic
+  // paste event carrying the files, which these sites also accept (same code
+  // path as pasting a screenshot).
+  function attachFiles(input, files) {
+    const dt = new DataTransfer();
+    for (const f of files) dt.items.add(dataUrlToFile(f));
+
+    const fileInput = Array.from(document.querySelectorAll('input[type="file"]')).find(
+      (el) => !el.disabled
+    );
+    if (fileInput) {
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+      return 'file-input';
+    }
+
+    input.focus();
+    const pasteEvent = new ClipboardEvent('paste', {
+      bubbles: true,
+      cancelable: true,
+      clipboardData: dt,
+    });
+    input.dispatchEvent(pasteEvent);
+    return 'paste';
+  }
+
+  function insertPrompt(text, files) {
     const adapter = currentAdapter();
     if (!adapter) return { ok: false, error: 'This site is not supported.' };
 
     const input = findFirst(adapter.inputSelectors);
     if (!input) return { ok: false, error: `Could not find the ${adapter.name} chatbox on this page.` };
 
-    if (input.tagName === 'TEXTAREA') {
-      insertIntoTextarea(input, text);
-    } else {
-      insertIntoContentEditable(input, text);
+    let attached = 0;
+    if (Array.isArray(files) && files.length) {
+      try {
+        attachFiles(input, files);
+        attached = files.length;
+      } catch (err) {
+        console.warn('PromptDeck: file attach failed', err);
+      }
     }
-    return { ok: true, adapter: adapter.name };
+
+    if (text) {
+      if (input.tagName === 'TEXTAREA') {
+        insertIntoTextarea(input, text);
+      } else {
+        insertIntoContentEditable(input, text);
+      }
+    }
+    return { ok: true, adapter: adapter.name, attached };
   }
 
   function clickSend() {
@@ -126,13 +174,15 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === 'INSERT_PROMPT') {
-      const result = insertPrompt(message.text);
+      const result = insertPrompt(message.text, message.files);
       if (result.ok && message.send) {
-        // Give the site's framework a beat to enable the send button.
+        // Give the site's framework a beat to enable the send button. With
+        // attachments the site needs longer — uploads must register first.
+        const delay = result.attached ? 1500 : 250;
         setTimeout(() => {
           const sent = clickSend();
           sendResponse({ ...result, sent });
-        }, 250);
+        }, delay);
         return true; // async sendResponse
       }
       sendResponse(result);

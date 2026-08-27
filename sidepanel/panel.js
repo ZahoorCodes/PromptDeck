@@ -11,6 +11,13 @@ const charcountEl = document.getElementById('charcount');
 const clearAllBtn = document.getElementById('clear-all');
 const toastEl = document.getElementById('toast');
 const versionEl = document.getElementById('version');
+const attachBtn = document.getElementById('attach');
+const fileInputEl = document.getElementById('file-input');
+const attachmentsEl = document.getElementById('attachments');
+
+// Files are stored as data URLs in chrome.storage; keep a sane cap so
+// runtime messages to the content script stay well under Chrome's limit.
+const MAX_TOTAL_BYTES = 15 * 1024 * 1024; // 15 MB per prompt
 
 const ICONS = {
   insert:
@@ -29,6 +36,7 @@ let editingId = null;
 let expandedIds = new Set();
 let toastTimer = null;
 let draggedId = null;
+let pendingFiles = []; // attachments for the draft being composed
 
 versionEl.textContent = 'v' + chrome.runtime.getManifest().version;
 
@@ -44,11 +52,16 @@ function toast(message, kind) {
 
 /* ---------- messaging ---------- */
 
-async function sendToActiveTab(text, send) {
+async function sendToActiveTab(text, send, files) {
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
   if (!tab) return { ok: false, error: 'No active tab found.' };
   try {
-    const result = await chrome.tabs.sendMessage(tab.id, { type: 'INSERT_PROMPT', text, send });
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: 'INSERT_PROMPT',
+      text,
+      send,
+      files: files || [],
+    });
     return result || { ok: false, error: 'No response from the page.' };
   } catch (err) {
     return {
@@ -59,18 +72,71 @@ async function sendToActiveTab(text, send) {
 }
 
 async function insertItem(item, send) {
-  const result = await sendToActiveTab(item.text, send);
+  const result = await sendToActiveTab(item.text, send, item.files);
   if (result.ok) {
     await removeFromQueue(item.id);
+    const files = result.attached ? ` +${result.attached} file${result.attached > 1 ? 's' : ''}` : '';
     toast(
       send && result.sent
-        ? `Sent to ${result.adapter} 🚀`
-        : `Dealt to ${result.adapter} — press Enter there to send.`,
+        ? `Sent to ${result.adapter}${files} 🚀`
+        : `Dealt to ${result.adapter}${files} — press Enter there to send.`,
       'ok'
     );
   } else {
     toast(result.error, 'error');
   }
+}
+
+/* ---------- attachments ---------- */
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function renderAttachments() {
+  attachmentsEl.textContent = '';
+  attachmentsEl.hidden = pendingFiles.length === 0;
+  pendingFiles.forEach((f, i) => {
+    const chip = el('span', 'file-chip');
+    chip.appendChild(el('span', 'file-name', undefined)).textContent = f.name;
+    chip.appendChild(el('span', 'file-size')).textContent = formatSize(f.size);
+    const x = makeBtn('file-remove', '×', 'Remove attachment', () => {
+      pendingFiles.splice(i, 1);
+      renderAttachments();
+    });
+    chip.appendChild(x);
+    attachmentsEl.appendChild(chip);
+  });
+}
+
+async function addPickedFiles(fileList) {
+  const current = pendingFiles.reduce((sum, f) => sum + f.size, 0);
+  let total = current;
+  for (const file of fileList) {
+    if (total + file.size > MAX_TOTAL_BYTES) {
+      toast(`Attachment limit is ${formatSize(MAX_TOTAL_BYTES)} per prompt — "${file.name}" skipped.`, 'error');
+      continue;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      pendingFiles.push({ name: file.name, type: file.type, size: file.size, dataUrl });
+      total += file.size;
+    } catch (err) {
+      toast(`Could not read "${file.name}".`, 'error');
+    }
+  }
+  renderAttachments();
 }
 
 /* ---------- rendering ---------- */
@@ -155,6 +221,18 @@ function renderItem(item, index, total) {
   const text = el('div', 'item-text');
   text.textContent = item.text;
   li.appendChild(text);
+
+  // read-only attachment chips
+  if (item.files && item.files.length) {
+    const files = el('div', 'attachments item-files');
+    for (const f of item.files) {
+      const chip = el('span', 'file-chip');
+      chip.appendChild(el('span', 'file-name')).textContent = f.name;
+      chip.appendChild(el('span', 'file-size')).textContent = formatSize(f.size);
+      files.appendChild(chip);
+    }
+    li.appendChild(files);
+  }
 
   const expanded = expandedIds.has(item.id);
   requestAnimationFrame(() => {
@@ -243,29 +321,41 @@ function autoGrow() {
 
 async function addDraftToQueue() {
   const text = draftEl.value.trim();
-  if (!text) {
-    toast('Write a prompt first.', 'error');
+  if (!text && pendingFiles.length === 0) {
+    toast('Write a prompt or attach a file first.', 'error');
     return;
   }
-  await addToQueue(text);
+  await addToQueue(text, pendingFiles);
   draftEl.value = '';
+  pendingFiles = [];
+  renderAttachments();
   autoGrow();
   draftEl.focus();
 }
 
 addBtn.addEventListener('click', addDraftToQueue);
 
+attachBtn.addEventListener('click', () => fileInputEl.click());
+
+fileInputEl.addEventListener('change', async () => {
+  await addPickedFiles(Array.from(fileInputEl.files || []));
+  fileInputEl.value = ''; // allow picking the same file again later
+});
+
 insertNowBtn.addEventListener('click', async () => {
   const text = draftEl.value.trim();
-  if (!text) {
-    toast('Write a prompt first.', 'error');
+  if (!text && pendingFiles.length === 0) {
+    toast('Write a prompt or attach a file first.', 'error');
     return;
   }
-  const result = await sendToActiveTab(text, false);
+  const result = await sendToActiveTab(text, false, pendingFiles);
   if (result.ok) {
     draftEl.value = '';
+    pendingFiles = [];
+    renderAttachments();
     autoGrow();
-    toast(`Dealt to ${result.adapter} chatbox.`, 'ok');
+    const files = result.attached ? ` +${result.attached} file${result.attached > 1 ? 's' : ''}` : '';
+    toast(`Dealt to ${result.adapter} chatbox${files}.`, 'ok');
   } else {
     toast(result.error, 'error');
   }

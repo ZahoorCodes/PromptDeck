@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "PromptDeck — AI Prompt Queue",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Draft and queue your next prompts while ChatGPT, Claude or Gemini is responding — deal them to the chatbox when YOU are ready.",
-  "permissions": ["storage", "sidePanel"],
+  "permissions": ["storage", "unlimitedStorage", "sidePanel"],
   "host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*",

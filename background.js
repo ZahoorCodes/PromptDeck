@@ -23,6 +23,7 @@ chrome.commands.onCommand.addListener(async (command) => {
     const result = await chrome.tabs.sendMessage(tab.id, {
       type: 'INSERT_PROMPT',
       text: item.text,
+      files: item.files || [],
       send: false,
     });
     if (!result || !result.ok) await unshiftQueue(item);

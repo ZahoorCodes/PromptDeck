@@ -12,9 +12,9 @@ async function setQueue(queue) {
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
 }
 
-async function addToQueue(text) {
+async function addToQueue(text, files) {
   const queue = await getQueue();
-  queue.push({ id: crypto.randomUUID(), text });
+  queue.push({ id: crypto.randomUUID(), text, files: files || [] });
   await setQueue(queue);
 }
 
